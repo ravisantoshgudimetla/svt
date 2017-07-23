@@ -7,7 +7,9 @@
 ################################################
 master=$1
 build_array=(1 5 10 20 30 40 50)
-app_array=("cakephp" "eap" "rails" "django" "nodejs")
+app_array=("cakephp" "eap" "django" "nodejs")
+# this number should be equal to the number of the created projects
+readonly PROJECT_NUM=50
 
 function delete_projects()
 {
@@ -20,12 +22,30 @@ function create_projects()
   python ../../../openshift_scalability/cluster-loader.py -f $1
 }
 
+function prepare_builds_file()
+{
+  bc_name=`oc get bc -n  proj0 --no-headers | awk {'print $1'}`
+  local running_build_file
+  running_build_file="../content/running-builds.json"
+  # generate running-builds.json on the fly
+  printf '%s\n' "[" > "${running_build_file}"
+  for (( c=0; c<"${PROJECT_NUM}"; c++ ))
+  do
+    if [[ "$c" == $((PROJECT_NUM - 1)) ]]; then
+      printf '%s\n' "{\"namespace\":\"proj${c}\", \"name\":\"$bc_name\"}" >> "${running_build_file}"
+    else
+      printf '%s\n' "{\"namespace\":\"proj${c}\", \"name\":\"$bc_name\"}," >> "${running_build_file}"
+    fi
+  done
+  printf '%s' "]" >> "${running_build_file}"
+}
+
 function run_builds()
 {
   for i in "${build_array[@]}"
   do
     echo "running $i $1 concurrent builds"
-    python ../../ose3_perf/scripts/build_test.py -u redhat -p redhat -m $master -n 2 -r $i >> conc_builds_$1.out
+    python ../../ose3_perf/scripts/build_test.py -z -n 2 -r $i -f ../content/running-builds.json >> conc_builds_$1.out
     sleep 30
   done
 }
@@ -77,6 +97,7 @@ do
   echo "Starting $proj builds" >> conc_builds_$proj.out
   create_projects "../content/conc_builds_$proj.yaml"
   wait_for_build_completion
+  prepare_builds_file
   run_builds $proj
   delete_projects
   wait_for_project_termination

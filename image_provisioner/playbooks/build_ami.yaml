@@ -25,9 +25,9 @@
       user_data: "{{ lookup('file', '../cloud-init/user-data-aws') }}"
       exact_count: 1
       count_tag:
-         Name: ami_builder
+         Name: "{{ instance_tag | default('ami_builder') }}"
       instance_tags:
-         Name: ami_builder
+         Name: "{{ instance_tag | default('ami_builder') }}"
     register: ami_instance
 
   - name: waiting for ssh to start
@@ -49,7 +49,9 @@
     - pbench-config
     - docker-config
     - aos-ansible
+    - ansible-update
     - openshift-package-install
+    - seal-image
 
 - hosts: localhost
   connection: local
@@ -65,7 +67,7 @@
       region: "{{ region }}"
       state: present
       description: This was provisioned {{ ansible_date_time.iso8601 }}
-      name: ocp-{{ openshift_version }}-gold-auto
+      name: "{{ 'ocp-{{ openshift_version }}-atomic-gold-auto' if atomic | default(False) else 'ocp-{{ openshift_version }}-rhel-gold-auto' }}"
       wait: yes
     register: amioutput
 
